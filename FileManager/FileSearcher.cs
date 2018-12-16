@@ -43,11 +43,12 @@ namespace FileManager
                     if (token.IsCancellationRequested)
                         return;
 
-                    while (!matchedFiles.IsEmpty)
+                    int count = 10;
+                    while (count > 0 && !matchedFiles.IsEmpty)
                     {
+                        count--;
                         if (matchedFiles.TryDequeue(out FileInfo file))
                         {
-                            Task.Delay(300);
                             view.Invoke(new Action(() => { view.Add(file); }));
                         }
                     }
@@ -69,10 +70,10 @@ namespace FileManager
             var browser = new DirectoryBrowser();
             browser.GetDirectoryInfo(path);
 
-            foreach (var dir in browser.dirList)
+            Parallel.ForEach(browser.dirList, new ParallelOptions { MaxDegreeOfParallelism = 3 }, dir =>
             {
-                Task.Run(() => SearchByName(wildcard, dir.FullName, token), token);
-            }
+                SearchByName(wildcard, dir.FullName, token);
+            });
 
             var matched = Array.FindAll(browser.fileList, item => MatchName(wildcard, item.Name));
             foreach (var file in matched)
