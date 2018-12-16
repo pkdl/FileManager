@@ -11,7 +11,7 @@ namespace FileManager
 {
     class FileSearcher
     {
-        ConcurrentQueue<FileInfo> matchedFiles = new ConcurrentQueue<FileInfo>();
+        ConcurrentQueue<FileInfo> matchedFiles;
         CancellationTokenSource cts = new CancellationTokenSource();
 
         public void StartSearchByName(string wildcard, Panel panel)
@@ -34,25 +34,26 @@ namespace FileManager
             view.Columns[0].Width = 200;
             view.Columns.Add("Type");
 
+            matchedFiles = new ConcurrentQueue<FileInfo>();
+
             Task.Run(() => SearchByName(wildcard, path, token), token);
 
             Task.Run(() => {
-                Task.Delay(100);
-                while (true)
+                //Task.Delay(100);
+                while (!token.IsCancellationRequested)
                 {
-                    if (token.IsCancellationRequested)
-                        return;
-
-                    int count = 10;
-                    while (count > 0 && !matchedFiles.IsEmpty)
+                    int count = 100;
+                    var buffer = new List<FileInfo>();
+                    while (count > 0 && !matchedFiles.IsEmpty && !token.IsCancellationRequested)
                     {
                         count--;
                         if (matchedFiles.TryDequeue(out FileInfo file))
                         {
-                            view.Invoke(new Action(() => { view.Add(file); }));
+                            buffer.Add(file);                            
                         }
                     }
-                    Task.Delay(2000);
+                    view.Invoke(new Action(() => { view.Add(buffer); }));
+                    //Task.Delay(2000);
                 }                    
             }, token);
         }
@@ -70,17 +71,16 @@ namespace FileManager
             var browser = new DirectoryBrowser();
             browser.GetDirectoryInfo(path);
 
-            Parallel.ForEach(browser.dirList, new ParallelOptions { MaxDegreeOfParallelism = 3 }, dir =>
-            {
-                SearchByName(wildcard, dir.FullName, token);
-            });
-
             var matched = Array.FindAll(browser.fileList, item => MatchName(wildcard, item.Name));
             foreach (var file in matched)
             {
                 matchedFiles.Enqueue(file);
             }
 
+            Parallel.ForEach(browser.dirList, new ParallelOptions { MaxDegreeOfParallelism = 3 }, dir =>
+            {
+                SearchByName(wildcard, dir.FullName, token);
+            });
         }
 
         private bool MatchName(string wildcard, string name)

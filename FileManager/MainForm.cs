@@ -657,6 +657,14 @@ namespace FileManager
             Items.Add(item);
         }
 
+        public void Add(List<FileInfo> list)
+        {
+            foreach (var item in list)
+            {
+                Add(item);
+            }
+        }
+
         public void Add(DirectoryInfo dir)
         {
             var item = new ListViewItem(dir.Name);
