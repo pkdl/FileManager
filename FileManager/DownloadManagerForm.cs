@@ -40,6 +40,7 @@ namespace FileManager
         {
             int posY = downloadEntryList.Any() ? downloadEntryList.Last().Bottom + 10 : 50;
             var entry = new DownloadEntry(10, posY, URL, this);
+            entry.StartDownload();
             downloadEntryList.Add(entry);
         }
 
@@ -66,19 +67,22 @@ namespace FileManager
         private Label statusLabel;
         private String filename;
 
+        Uri uri;
+        IProgress<int> progress;
+        string filePath;
+
         public int Bottom
         {
             get { return statusLabel.Bottom; }
         }
 
-        private WebClient webClient = new WebClient();
+        //private WebClient webClient = new WebClient();
+        private AsyncDownloader downloader = new AsyncDownloader();
         public DownloadEntry(int posX, int posY, String URL, DownloadManagerForm parentForm)
         {
-            webClient.DownloadProgressChanged += wc_DownloadProgressChanged;
-            var uri = new Uri(URL);
+            uri = new Uri(URL);
             filename = System.IO.Path.GetFileName(uri.LocalPath);
-            String filePath = AdaptFileNameIfExist(System.IO.Path.Combine(@"D:\test", filename));
-            webClient.DownloadFileAsync(uri, filePath);
+            filePath = AdaptFileNameIfExist(System.IO.Path.Combine(@"D:\test", filename));
 
             progressBar = new ProgressBar
             {
@@ -110,6 +114,23 @@ namespace FileManager
                 MaximumSize = new Size(progressBar.Width + cancelButton.Width + 10, 15)
             };
             parentForm.Controls.Add(statusLabel);
+
+
+            //webClient.DownloadProgressChanged += wc_DownloadProgressChanged;
+
+            //webClient.DownloadFileAsync(uri, filePath);
+            progress = new Progress<int>(percent =>
+            {
+                progressBar.Value = percent;
+            });
+        }
+
+        public async Task StartDownload()
+        {
+            if(await downloader.DownloadFile(uri, filePath, progress))
+                statusLabel.Text = String.Concat("Completed ", filename);
+            else
+                statusLabel.Text = String.Concat("Canceled ", filename);
         }
 
         private String AdaptFileNameIfExist(String fullPath)
@@ -131,8 +152,9 @@ namespace FileManager
 
         public void Cancel()
         {
-            webClient.CancelAsync();
-            statusLabel.Text = String.Concat("Canceled ", filename);
+            //webClient.CancelAsync();
+            downloader.Cancel();
+            //statusLabel.Text = String.Concat("Canceled ", filename);
         }
 
         void wc_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e)
